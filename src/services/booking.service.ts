@@ -347,8 +347,16 @@ export const cancelBooking = async (
   bookingId: string,
   userId: string,
   userRole: string,
+  reason: string,
   lang: string
-): Promise<IBooking> => {
+): Promise<{
+  booking: IBooking;
+  refundInfo: {
+    refundAmount: number;
+    refundPercentage: number;
+    hoursUntilService: number;
+  };
+}> => {
   const booking = await Booking.findById(bookingId).populate('caddieId golferId');
   if (!booking) {
     throw new NotFoundError('booking.notFound', lang);
@@ -356,16 +364,19 @@ export const cancelBooking = async (
 
   // Verificar que el usuario es el golfer o el caddie de la reserva
   let isOwner = false;
+  let cancelledBy: 'golfer' | 'caddie' = 'golfer';
 
   if (userRole === 'golfer') {
     const golfer = await Golfer.findOne({ userId });
     if (golfer && golfer._id.toString() === booking.golferId.toString()) {
       isOwner = true;
+      cancelledBy = 'golfer';
     }
   } else if (userRole === 'caddie') {
     const caddie = await Caddie.findOne({ userId });
     if (caddie && caddie._id.toString() === booking.caddieId.toString()) {
       isOwner = true;
+      cancelledBy = 'caddie';
     }
   }
 
@@ -373,14 +384,62 @@ export const cancelBooking = async (
     throw new BadRequestError('errors.forbidden', lang);
   }
 
-  if (booking.status === BookingStatus.COMPLETED || booking.status === BookingStatus.CANCELLED) {
-    throw new BadRequestError('errors.badRequest', lang);
+  // No se puede cancelar si ya está in-progress, completed, o ya cancelado
+  if (['in-progress', 'completed', 'cancelled'].includes(booking.status)) {
+    throw new BadRequestError('booking.cannotCancel', lang);
   }
 
+  // Calcular tiempo restante hasta el servicio
+  const now = new Date();
+  const serviceDateTime = new Date(booking.date);
+  const [hours, minutes] = booking.startTime.split(':').map(Number);
+  serviceDateTime.setHours(hours, minutes, 0, 0);
+  
+  const hoursUntilService = (serviceDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+  // Política de reembolso
+  const policy = {
+    fullRefundHoursBefore: 24,
+    partialRefundHoursBefore: 12,
+    partialRefundPercentage: 50,
+  };
+
+  let refundPercentage = 0;
+  if (hoursUntilService >= policy.fullRefundHoursBefore) {
+    refundPercentage = 100;
+  } else if (hoursUntilService >= policy.partialRefundHoursBefore) {
+    refundPercentage = policy.partialRefundPercentage;
+  }
+  // Si es menos de 12h, refundPercentage = 0
+
+  const refundAmount = Math.round((booking.totalPrice * refundPercentage) / 100);
+
+  // Actualizar booking con información de cancelación
   booking.status = BookingStatus.CANCELLED;
+  booking.cancelledAt = now;
+  booking.cancelledBy = cancelledBy;
+  booking.cancellationReason = reason;
+  booking.refundAmount = refundAmount;
+  booking.refundPercentage = refundPercentage;
+  
+  // Si hay un pago asociado y corresponde reembolso, marcar como pendiente
+  if (booking.paymentId && refundAmount > 0) {
+    booking.refundStatus = 'pending';
+    // TODO: Cuando exista integración con MercadoPago, procesar refund aquí
+  }
+
   await booking.save();
 
-  return booking;
+  // TODO: Notificar a la otra parte (caddie o golfer según quién canceló)
+
+  return {
+    booking,
+    refundInfo: {
+      refundAmount,
+      refundPercentage,
+      hoursUntilService: Math.round(hoursUntilService * 10) / 10,
+    },
+  };
 };
 
 export const addRating = async (

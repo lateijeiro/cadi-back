@@ -157,15 +157,17 @@ export const completeBooking = async (req: Request, res: Response, next: NextFun
 export const cancelBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
+    const { reason } = req.body;
     const userId = req.user!.userId;
     const userRole = req.user!.role;
     const lang = req.language || 'es';
 
-    const booking = await bookingService.cancelBooking(id, userId, userRole, lang);
+    const result = await bookingService.cancelBooking(id, userId, userRole, reason || '', lang);
 
     res.json({
       message: t('booking.cancelled', lang),
-      data: booking,
+      data: result.booking,
+      refundInfo: result.refundInfo,
     });
   } catch (error) {
     next(error);

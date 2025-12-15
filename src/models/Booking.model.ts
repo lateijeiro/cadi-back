@@ -14,6 +14,14 @@ export interface IBooking extends Document {
   rating?: number;
   review?: string;
   paymentId?: Types.ObjectId;
+  // Campos de cancelación
+  cancelledAt?: Date;
+  cancelledBy?: 'golfer' | 'caddie' | 'admin';
+  cancellationReason?: string;
+  refundAmount?: number;
+  refundPercentage?: number;
+  refundStatus?: 'pending' | 'processing' | 'completed' | 'failed';
+  refundId?: string; // ID del refund de MercadoPago
   createdAt: Date;
   updatedAt: Date;
 }
@@ -80,6 +88,33 @@ const BookingSchema = new Schema<IBooking>(
     paymentId: {
       type: Schema.Types.ObjectId,
       ref: 'Payment',
+    },
+    cancelledAt: {
+      type: Date,
+    },
+    cancelledBy: {
+      type: String,
+      enum: ['golfer', 'caddie', 'admin'],
+    },
+    cancellationReason: {
+      type: String,
+      trim: true,
+    },
+    refundAmount: {
+      type: Number,
+      min: 0,
+    },
+    refundPercentage: {
+      type: Number,
+      min: 0,
+      max: 100,
+    },
+    refundStatus: {
+      type: String,
+      enum: ['pending', 'processing', 'completed', 'failed'],
+    },
+    refundId: {
+      type: String,
     },
   },
   {
