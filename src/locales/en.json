@@ -1,0 +1,85 @@
+{
+  "common": {
+    "ok": "ok",
+    "error": "error",
+    "success": "success",
+    "created": "created",
+    "updated": "updated",
+    "deleted": "deleted"
+  },
+  "errors": {
+    "internal": "Internal server error",
+    "notFound": "Not found",
+    "unauthorized": "Unauthorized",
+    "forbidden": "Forbidden",
+    "badRequest": "Bad request",
+    "validation": "Validation error",
+    "emailExists": "Email already registered",
+    "invalidCredentials": "Invalid credentials",
+    "tokenExpired": "Token expired",
+    "tokenInvalid": "Invalid token"
+  },
+  "auth": {
+    "loginSuccess": "Login successful",
+    "registerSuccess": "Registration successful",
+    "logoutSuccess": "Logout successful",
+    "passwordRequired": "Password is required",
+    "emailRequired": "Email is required"
+  },
+  "user": {
+    "notFound": "User not found",
+    "created": "User created successfully",
+    "updated": "User updated successfully",
+    "deleted": "User deleted successfully"
+  },
+  "caddie": {
+    "notFound": "Caddie not found",
+    "pending": "Caddie profile pending approval",
+    "approved": "Caddie profile approved",
+    "rejected": "Caddie profile rejected",
+    "notAvailable": "Caddie not available for selected date"
+  },
+  "club": {
+    "notFound": "Club not found",
+    "created": "Club created successfully",
+    "updated": "Club updated successfully",
+    "deleted": "Club deleted successfully"
+  },
+  "booking": {
+    "notFound": "Booking not found",
+    "created": "Booking created successfully",
+    "accepted": "Booking accepted",
+    "rejected": "Booking rejected",
+    "started": "Service started successfully",
+    "completed": "Booking completed",
+    "cancelled": "Booking cancelled",
+    "alreadyBooked": "Caddie already has a booking at that time",
+    "invalidStatus": "Service cannot be started in this status",
+    "invalidQR": "Invalid QR code",
+    "qrMismatch": "QR code does not match this booking",
+    "qrCaddieMismatch": "QR code does not match this caddie",
+    "qrDateMismatch": "QR code does not match the booking date"
+  },
+  "payment": {
+    "pending": "Payment pending",
+    "completed": "Payment completed",
+    "failed": "Payment failed",
+    "refunded": "Payment refunded",
+    "notFound": "Payment not found",
+    "created": "Payment preference created successfully",
+    "bookingNotAccepted": "Booking must be accepted to create payment",
+    "alreadyPaid": "This booking has already been paid",
+    "creationFailed": "Failed to create payment preference",
+    "notCompleted": "Payment is not completed",
+    "alreadyLiquidated": "This payment has already been liquidated",
+    "liquidated": "Payment marked as liquidated"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalidEmail": "Invalid email",
+    "invalidPhone": "Invalid phone number",
+    "minLength": "Minimum length: {{min}} characters",
+    "maxLength": "Maximum length: {{max}} characters",
+    "invalidFormat": "Invalid format"
+  }
+}

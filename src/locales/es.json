@@ -1,0 +1,85 @@
+{
+  "common": {
+    "ok": "ok",
+    "error": "error",
+    "success": "éxito",
+    "created": "creado",
+    "updated": "actualizado",
+    "deleted": "eliminado"
+  },
+  "errors": {
+    "internal": "Error interno del servidor",
+    "notFound": "No encontrado",
+    "unauthorized": "No autorizado",
+    "forbidden": "Acceso prohibido",
+    "badRequest": "Solicitud inválida",
+    "validation": "Error de validación",
+    "emailExists": "El email ya está registrado",
+    "invalidCredentials": "Credenciales inválidas",
+    "tokenExpired": "Token expirado",
+    "tokenInvalid": "Token inválido"
+  },
+  "auth": {
+    "loginSuccess": "Inicio de sesión exitoso",
+    "registerSuccess": "Registro exitoso",
+    "logoutSuccess": "Sesión cerrada",
+    "passwordRequired": "La contraseña es requerida",
+    "emailRequired": "El email es requerido"
+  },
+  "user": {
+    "notFound": "Usuario no encontrado",
+    "created": "Usuario creado exitosamente",
+    "updated": "Usuario actualizado exitosamente",
+    "deleted": "Usuario eliminado exitosamente"
+  },
+  "caddie": {
+    "notFound": "Caddie no encontrado",
+    "pending": "Perfil de caddie pendiente de aprobación",
+    "approved": "Perfil de caddie aprobado",
+    "rejected": "Perfil de caddie rechazado",
+    "notAvailable": "Caddie no disponible para la fecha seleccionada"
+  },
+  "club": {
+    "notFound": "Club no encontrado",
+    "created": "Club creado exitosamente",
+    "updated": "Club actualizado exitosamente",
+    "deleted": "Club eliminado exitosamente"
+  },
+  "booking": {
+    "notFound": "Reserva no encontrada",
+    "created": "Reserva creada exitosamente",
+    "accepted": "Reserva aceptada",
+    "rejected": "Reserva rechazada",
+    "started": "Servicio iniciado exitosamente",
+    "completed": "Reserva completada",
+    "cancelled": "Reserva cancelada",
+    "alreadyBooked": "El caddie ya tiene una reserva en ese horario",
+    "invalidStatus": "El servicio no puede iniciarse en este estado",
+    "invalidQR": "Código QR inválido",
+    "qrMismatch": "El código QR no corresponde a esta reserva",
+    "qrCaddieMismatch": "El código QR no corresponde a este caddie",
+    "qrDateMismatch": "El código QR no corresponde a la fecha de esta reserva"
+  },
+  "payment": {
+    "pending": "Pago pendiente",
+    "completed": "Pago completado",
+    "failed": "Pago fallido",
+    "refunded": "Pago reembolsado",
+    "notFound": "Pago no encontrado",
+    "created": "Preferencia de pago creada exitosamente",
+    "bookingNotAccepted": "La reserva debe estar aceptada para crear el pago",
+    "alreadyPaid": "Esta reserva ya ha sido pagada",
+    "creationFailed": "Error al crear la preferencia de pago",
+    "notCompleted": "El pago no est\u00e1 completado",
+    "alreadyLiquidated": "Este pago ya fue liquidado",
+    "liquidated": "Pago marcado como liquidado"
+  },
+  "validation": {
+    "required": "Este campo es requerido",
+    "invalidEmail": "Email inválido",
+    "invalidPhone": "Teléfono inválido",
+    "minLength": "Longitud mínima: {{min}} caracteres",
+    "maxLength": "Longitud máxima: {{max}} caracteres",
+    "invalidFormat": "Formato inválido"
+  }
+}
