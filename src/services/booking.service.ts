@@ -4,7 +4,6 @@ import { Golfer } from '../models/Golfer.model';
 import { Club } from '../models/Club.model';
 import { BookingStatus } from '../types/enums';
 import { NotFoundError, BadRequestError } from '../utils/errors';
-import { generateQRCode } from '../utils/qrcode';
 
 interface CreateBookingData {
   golferId: string;
@@ -141,8 +140,15 @@ export const createBooking = async (data: CreateBookingData, lang: string): Prom
 export const getBookingById = async (bookingId: string, lang: string): Promise<IBooking> => {
   const booking = await Booking.findById(bookingId)
     .populate('golferId', 'userId')
-    .populate('caddieId', 'userId dni category experience')
-    .populate('clubId', 'name address');
+    .populate({
+      path: 'caddieId',
+      select: 'userId dni category experience',
+      populate: {
+        path: 'userId',
+        select: 'firstName lastName phone',
+      },
+    })
+    .populate('clubId', 'name address city province');
 
   if (!booking) {
     throw new NotFoundError('booking.notFound', lang);
@@ -213,24 +219,16 @@ export const acceptBooking = async (
     throw new BadRequestError('errors.badRequest', lang);
   }
 
-  // Generar QR code con datos de la reserva
+
+  // Solo bookingId y timestamp para el QR
   const qrCodeData = {
     bookingId: booking._id.toString(),
-    caddieId: booking.caddieId.toString(),
-    golferId: booking.golferId.toString(),
-    clubId: booking.clubId.toString(),
-    date: booking.date.toISOString(),
-    startTime: booking.startTime,
-    endTime: booking.endTime,
     timestamp: Date.now(),
   };
-
-  const qrCode = await generateQRCode(qrCodeData);
-
+  // Guardar el string JSON, no el DataURL
   booking.status = BookingStatus.ACCEPTED;
-  booking.qrCode = qrCode;
+  booking.qrCode = JSON.stringify(qrCodeData);
   await booking.save();
-
   return booking;
 };
 
@@ -283,6 +281,7 @@ export const startBooking = async (
     throw new BadRequestError('El servicio no puede iniciarse en este estado', 'booking.invalidStatus');
   }
 
+
   // Parsear y validar el QR
   let parsedQR: any;
   try {
@@ -296,15 +295,17 @@ export const startBooking = async (
     throw new BadRequestError('El código QR no corresponde a esta reserva', 'booking.qrMismatch');
   }
 
-  // Validar que el caddie sea el correcto
-  if (parsedQR.caddieId !== booking.caddieId.toString()) {
-    throw new BadRequestError('El código QR no corresponde a este caddie', 'booking.qrCaddieMismatch');
+  // Validar fecha usando el timestamp del QR (±1 día respecto a la fecha/hora de la reserva)
+  const qrTimestamp = Number(parsedQR.timestamp);
+  if (!qrTimestamp || isNaN(qrTimestamp)) {
+    throw new BadRequestError('El QR no contiene un timestamp válido', 'booking.qrInvalidTimestamp');
   }
-
-  // Validar fecha (opcional - permitir +/- 1 día)
-  const bookingDate = new Date(booking.date);
-  const qrDate = new Date(parsedQR.date);
-  const daysDiff = Math.abs((bookingDate.getTime() - qrDate.getTime()) / (1000 * 60 * 60 * 24));
+  // Fecha/hora de la reserva
+  const serviceDateTime = new Date(booking.date);
+  const [hours, minutes] = booking.startTime.split(':').map(Number);
+  serviceDateTime.setHours(hours, minutes, 0, 0);
+  // Diferencia en días
+  const daysDiff = Math.abs((serviceDateTime.getTime() - qrTimestamp) / (1000 * 60 * 60 * 24));
   if (daysDiff > 1) {
     throw new BadRequestError('El código QR no corresponde a la fecha de esta reserva', 'booking.qrDateMismatch');
   }
@@ -389,12 +390,12 @@ export const cancelBooking = async (
     throw new BadRequestError('booking.cannotCancel', lang);
   }
 
+
   // Calcular tiempo restante hasta el servicio
   const now = new Date();
   const serviceDateTime = new Date(booking.date);
   const [hours, minutes] = booking.startTime.split(':').map(Number);
   serviceDateTime.setHours(hours, minutes, 0, 0);
-  
   const hoursUntilService = (serviceDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
   // Política de reembolso
@@ -405,12 +406,15 @@ export const cancelBooking = async (
   };
 
   let refundPercentage = 0;
-  if (hoursUntilService >= policy.fullRefundHoursBefore) {
+  // Si la reserva no está confirmada por el caddie, siempre 100%
+  if (booking.status === 'pending') {
+    refundPercentage = 100;
+  } else if (hoursUntilService >= policy.fullRefundHoursBefore) {
     refundPercentage = 100;
   } else if (hoursUntilService >= policy.partialRefundHoursBefore) {
     refundPercentage = policy.partialRefundPercentage;
   }
-  // Si es menos de 12h, refundPercentage = 0
+  // Si es menos de 12h y no es pending, refundPercentage = 0
 
   const refundAmount = Math.round((booking.totalPrice * refundPercentage) / 100);
 

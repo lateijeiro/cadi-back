@@ -1,24 +1,23 @@
 import QRCode from 'qrcode';
 
+
+// Solo datos mínimos para el QR
 interface QRData {
   bookingId: string;
-  caddieId: string;
-  golferId: string;
-  clubId: string;
-  date: string;
-  startTime: string;
-  endTime: string;
   timestamp: number;
 }
 
 export const generateQRCode = async (data: QRData): Promise<string> => {
   try {
-    // Convertir datos a JSON string
-    const qrData = JSON.stringify(data);
-    
-    // Generar QR como Data URL (base64)
+    // Solo bookingId y timestamp
+    const qrData = JSON.stringify({
+      bookingId: data.bookingId,
+      timestamp: data.timestamp,
+    });
+
+    // Generar QR con menor corrección
     const qrCodeDataURL = await QRCode.toDataURL(qrData, {
-      errorCorrectionLevel: 'H',
+      errorCorrectionLevel: 'M',
       type: 'image/png',
       width: 300,
       margin: 1,
@@ -27,7 +26,6 @@ export const generateQRCode = async (data: QRData): Promise<string> => {
         light: '#FFFFFF',
       },
     });
-    
     return qrCodeDataURL;
   } catch (error) {
     console.error('Error generating QR code:', error);
@@ -38,21 +36,10 @@ export const generateQRCode = async (data: QRData): Promise<string> => {
 export const validateQRData = (qrString: string): QRData | null => {
   try {
     const data = JSON.parse(qrString) as QRData;
-    
-    // Validar que tenga todos los campos requeridos
-    if (
-      !data.bookingId ||
-      !data.caddieId ||
-      !data.golferId ||
-      !data.clubId ||
-      !data.date ||
-      !data.startTime ||
-      !data.endTime ||
-      !data.timestamp
-    ) {
+    // Validar que tenga los campos mínimos
+    if (!data.bookingId || !data.timestamp) {
       return null;
     }
-    
     return data;
   } catch (error) {
     return null;
