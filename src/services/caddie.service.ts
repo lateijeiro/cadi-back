@@ -258,8 +258,8 @@ export class CaddieService {
       return hours * 60 + minutes;
     };
 
-    // Helper: verifica si el rango solicitado cabe dentro de un slot de disponibilidad
-    const isWithinTimeSlot = (slotStr: string): boolean => {
+    // Helper: verifica si el slot de disponibilidad se solapa parcial o totalmente con el rango solicitado
+    const isOverlappingTimeSlot = (slotStr: string): boolean => {
       // Parsear varios formatos: "9-12", "09:00-12:00", etc.
       const match = slotStr.match(/^(\d{1,2}):?(\d{2})?-(\d{1,2}):?(\d{2})?$/);
       if (!match) return false;
@@ -272,8 +272,8 @@ export class CaddieService {
       const requestStartMin = timeToMinutes(startTime);
       const requestEndMin = timeToMinutes(endTime);
 
-      // El rango solicitado debe estar completamente dentro del slot
-      return requestStartMin >= slotStartMin && requestEndMin <= slotEndMin;
+      // Solapamiento parcial o total: (slotStart < requestEnd) && (slotEnd > requestStart)
+      return slotStartMin < requestEndMin && slotEndMin > requestStartMin;
     };
     
     // Buscar caddies aprobados que trabajen en ese club
@@ -285,7 +285,11 @@ export class CaddieService {
       .populate('clubs');
 
     const clubObjectId = new Types.ObjectId(clubId);
-    const dayOfWeek = date.getDay(); // 0=Domingo, 1=Lunes, etc.
+    // Forzar cálculo de dayOfWeek en zona Argentina (UTC-3)
+    // Sumar 3 horas para asegurar que la fecha se interprete como local
+    const argentinaDate = new Date(date.getTime() + 3 * 60 * 60 * 1000);
+    const dayOfWeek = argentinaDate.getDay();
+    console.log(`[CADDIE-DEBUG] Fecha buscada: ${date.toISOString().split('T')[0]}, dayOfWeek calculado (ARG): ${dayOfWeek}`);
 
     // Filtrar caddies disponibles
     const availableCaddies: ICaddie[] = [];
@@ -300,25 +304,30 @@ export class CaddieService {
         a => a.date.toISOString().split('T')[0] === dateStr
       );
 
-      if (specificAvailability && specificAvailability.timeSlots.some(slot => isWithinTimeSlot(slot))) {
+      if (specificAvailability && specificAvailability.timeSlots.some(slot => isOverlappingTimeSlot(slot))) {
         hasAvailability = true;
+        console.log(`[CADDIE-AVAIL] ${caddie._id} tiene disponibilidad específica para ${dateStr}`);
       }
 
       // Si no hay disponibilidad específica, verificar disponibilidad recurrente
-      if (!hasAvailability && caddie.recurringAvailability) {
-        const recurringAvail = caddie.recurringAvailability.find(
-          ra => ra.clubId.toString() === clubObjectId.toString() &&
-                ra.dayOfWeek === dayOfWeek &&
-                ra.timeSlots.some(slot => isWithinTimeSlot(slot))
-        );
-        
-        if (recurringAvail) {
-          hasAvailability = true;
-        }
+      if (!hasAvailability && Array.isArray(caddie.recurringAvailability)) {
+        hasAvailability = caddie.recurringAvailability.some((ra) => {
+          const raClubId = ra.clubId && ra.clubId.toString();
+          const searchClubId = clubObjectId.toString();
+          const raDay = typeof ra.dayOfWeek === 'string' ? parseInt(ra.dayOfWeek, 10) : ra.dayOfWeek;
+          const searchDay = typeof dayOfWeek === 'string' ? parseInt(dayOfWeek, 10) : dayOfWeek;
+          const overlap = raClubId === searchClubId &&
+            raDay === searchDay &&
+            Array.isArray(ra.timeSlots) && ra.timeSlots.some(slot => isOverlappingTimeSlot(slot));
+          if (overlap) {
+            console.log(`[CADDIE-AVAIL] ${caddie._id} recurring: clubId=${raClubId}, dayOfWeek=${raDay}, timeSlots=${JSON.stringify(ra.timeSlots)}`);
+          }
+          return overlap;
+        });
       }
 
-      // Si no tiene disponibilidad, pasar al siguiente
       if (!hasAvailability) {
+        console.log(`[CADDIE-FILTER] ${caddie._id} DESCARTADO: no tiene disponibilidad para el rango buscado (${startTime}-${endTime})`);
         continue;
       }
 
@@ -338,14 +347,21 @@ export class CaddieService {
         status: { $in: [BookingStatus.PENDING, BookingStatus.ACCEPTED] },
       });
 
-      // Verificar si hay solapamiento con alguna reserva existente
+      // Verificar si hay solapamiento con alguna reserva existente SOLO si la reserva está en estado pending o accepted
       const hasOverlap = existingBookings.some((booking) => {
         // Solapamiento: (start1 < end2) && (end1 > start2)
+        // Solo considerar reservas que NO estén canceladas ni rechazadas
+        if ([BookingStatus.CANCELLED, BookingStatus.REJECTED].includes(booking.status)) return false;
         return startTime < booking.endTime && endTime > booking.startTime;
       });
 
+      if (hasOverlap) {
+        console.log(`[CADDIE-FILTER] ${caddie._id} DESCARTADO: tiene reserva solapada en el rango buscado (${startTime}-${endTime})`);
+      }
+
       // Si NO tiene solapamiento, está disponible
       if (!hasOverlap) {
+        console.log(`[CADDIE-OK] ${caddie._id} agregado a resultados`);
         availableCaddies.push(caddie);
       }
     }

@@ -203,7 +203,7 @@ export const rateBooking = async (req: Request, res: Response, next: NextFunctio
 export const getCaddieAvailability = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { caddieId } = req.params;
-    const { date, clubId } = req.query;
+    const { date, clubId, startTime, endTime } = req.query;
     const lang = req.language || 'es';
 
     if (!date || !clubId) {
@@ -216,7 +216,9 @@ export const getCaddieAvailability = async (req: Request, res: Response, next: N
       caddieId,
       date as string,
       clubId as string,
-      lang
+      lang,
+      startTime as string | undefined,
+      endTime as string | undefined
     );
 
     return res.json({
