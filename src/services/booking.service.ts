@@ -220,12 +220,14 @@ export const acceptBooking = async (
   }
 
 
-  // Solo bookingId y timestamp para el QR
+  // Generar timestamp del QR con la fecha/hora de inicio del servicio
+  const serviceDateTime = new Date(booking.date);
+  const [hours, minutes] = booking.startTime.split(':').map(Number);
+  serviceDateTime.setHours(hours, minutes, 0, 0);
   const qrCodeData = {
     bookingId: booking._id.toString(),
-    timestamp: Date.now(),
+    timestamp: serviceDateTime.getTime(),
   };
-  // Guardar el string JSON, no el DataURL
   booking.status = BookingStatus.ACCEPTED;
   booking.qrCode = JSON.stringify(qrCodeData);
   await booking.save();
@@ -358,30 +360,54 @@ export const cancelBooking = async (
     hoursUntilService: number;
   };
 }> => {
+
   const booking = await Booking.findById(bookingId).populate('caddieId golferId');
   if (!booking) {
     throw new NotFoundError('booking.notFound', lang);
   }
 
-  // Verificar que el usuario es el golfer o el caddie de la reserva
+  // LOGS TEMPORALES PARA DEBUG
+  console.log('--- CANCEL BOOKING DEBUG ---');
+  console.log('userId:', userId);
+  console.log('userRole:', userRole);
+  console.log('booking.golferId:', booking.golferId?._id?.toString?.());
+  console.log('booking.caddieId:', booking.caddieId?._id?.toString?.());
+
   let isOwner = false;
   let cancelledBy: 'golfer' | 'caddie' = 'golfer';
 
   if (userRole === 'golfer') {
     const golfer = await Golfer.findOne({ userId });
-    if (golfer && golfer._id.toString() === booking.golferId.toString()) {
+    console.log('golfer encontrado:', golfer ? golfer._id?.toString?.() : null);
+    const bookingGolferId = booking.golferId && typeof booking.golferId === 'object' && booking.golferId._id ? booking.golferId._id.toString() : booking.golferId?.toString?.();
+    console.log('Comparando golfer._id:', golfer ? golfer._id?.toString?.() : null, 'con bookingGolferId:', bookingGolferId);
+    if (golfer && golfer._id.toString() === bookingGolferId) {
       isOwner = true;
       cancelledBy = 'golfer';
+    } else {
+      console.log('NO COINCIDEN los IDs de golfer');
     }
   } else if (userRole === 'caddie') {
     const caddie = await Caddie.findOne({ userId });
-    if (caddie && caddie._id.toString() === booking.caddieId.toString()) {
-      isOwner = true;
-      cancelledBy = 'caddie';
+    console.log('caddie encontrado:', caddie ? caddie._id?.toString?.() : null);
+    if (caddie) {
+      console.log('typeof caddie._id:', typeof caddie._id, 'valor:', caddie._id);
+      console.log('typeof booking.caddieId:', typeof booking.caddieId, 'valor:', booking.caddieId);
+      // Comparar correctamente el _id del caddie populado
+      const bookingCaddieId = booking.caddieId && typeof booking.caddieId === 'object' && booking.caddieId._id ? booking.caddieId._id.toString() : booking.caddieId?.toString?.();
+      console.log('caddie._id.toString():', caddie._id.toString());
+      console.log('bookingCaddieId:', bookingCaddieId);
+      if (caddie._id.toString() === bookingCaddieId) {
+        isOwner = true;
+        cancelledBy = 'caddie';
+      } else {
+        console.log('NO COINCIDEN los IDs de caddie');
+      }
     }
   }
 
   if (!isOwner) {
+    console.log('NO ES OWNER, forbidden');
     throw new BadRequestError('errors.forbidden', lang);
   }
 
@@ -406,15 +432,20 @@ export const cancelBooking = async (
   };
 
   let refundPercentage = 0;
-  // Si la reserva no está confirmada por el caddie, siempre 100%
-  if (booking.status === 'pending') {
+  if (cancelledBy === 'caddie') {
+    // Si cancela el caddie, siempre 100% de reembolso
     refundPercentage = 100;
-  } else if (hoursUntilService >= policy.fullRefundHoursBefore) {
-    refundPercentage = 100;
-  } else if (hoursUntilService >= policy.partialRefundHoursBefore) {
-    refundPercentage = policy.partialRefundPercentage;
+  } else {
+    // Si la reserva no está confirmada por el caddie, siempre 100%
+    if (booking.status === 'pending') {
+      refundPercentage = 100;
+    } else if (hoursUntilService >= policy.fullRefundHoursBefore) {
+      refundPercentage = 100;
+    } else if (hoursUntilService >= policy.partialRefundHoursBefore) {
+      refundPercentage = policy.partialRefundPercentage;
+    }
+    // Si es menos de 12h y no es pending, refundPercentage = 0
   }
-  // Si es menos de 12h y no es pending, refundPercentage = 0
 
   const refundAmount = Math.round((booking.totalPrice * refundPercentage) / 100);
 
