@@ -75,6 +75,9 @@
     "alreadyLiquidated": "Este pago ya fue liquidado",
     "liquidated": "Pago marcado como liquidado"
   },
+  "editProfile": {
+    "searchClub": "Buscar club"
+  },
   "validation": {
     "required": "Este campo es requerido",
     "invalidEmail": "Email inválido",

@@ -75,6 +75,9 @@
     "alreadyLiquidated": "This payment has already been liquidated",
     "liquidated": "Payment marked as liquidated"
   },
+  "editProfile": {
+    "searchClub": "Search club"
+  },
   "validation": {
     "required": "This field is required",
     "invalidEmail": "Invalid email",
