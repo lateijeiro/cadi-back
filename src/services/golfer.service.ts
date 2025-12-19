@@ -211,7 +211,9 @@ export class GolferService {
           category: '$caddie.category',
           suggestedRate: '$caddie.suggestedRate',
           lastBookingDate: 1,
-          totalServices: 1
+          totalServices: 1,
+          rating: '$caddie.rating',
+          totalRatings: '$caddie.totalRatings'
         }
       }
     ]);

@@ -11,8 +11,12 @@ export interface IBooking extends Document {
   totalPrice: number; // Precio total del servicio (suggestedRate * horas)
   status: BookingStatus;
   qrCode?: string;
-  rating?: number;
-  review?: string;
+  // Calificación y comentario del golfer al caddie
+  caddieRating?: number;
+  caddieReview?: string;
+  // Calificación y comentario del caddie al golfer
+  golferRating?: number;
+  golferReview?: string;
   paymentId?: Types.ObjectId;
   // Campos de cancelación
   cancelledAt?: Date;
@@ -76,12 +80,23 @@ const BookingSchema = new Schema<IBooking>(
     qrCode: {
       type: String,
     },
-    rating: {
+    // Calificación y comentario del golfer al caddie
+    caddieRating: {
       type: Number,
       min: 1,
       max: 5,
     },
-    review: {
+    caddieReview: {
+      type: String,
+      trim: true,
+    },
+    // Calificación y comentario del caddie al golfer
+    golferRating: {
+      type: Number,
+      min: 1,
+      max: 5,
+    },
+    golferReview: {
       type: String,
       trim: true,
     },

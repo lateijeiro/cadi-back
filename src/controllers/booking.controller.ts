@@ -283,6 +283,32 @@ export const rateBooking = async (req: Request, res: Response, next: NextFunctio
 };
 
 // Obtener disponibilidad de un caddie
+// Calificar golfer (solo caddie)
+export const rateGolfer = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { rating, review } = req.body;
+    const caddieUserId = req.user!.userId;
+    const lang = req.language || 'es';
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({
+        message: t('validation.invalidFormat', lang),
+      });
+    }
+
+    const booking = await bookingService.addGolferRating(id, caddieUserId, rating, review || '', lang);
+
+    return res.json({
+      message: t('common.updated', lang),
+      data: booking,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// Obtener disponibilidad de un caddie
 export const getCaddieAvailability = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { caddieId } = req.params;

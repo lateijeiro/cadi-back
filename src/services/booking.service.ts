@@ -543,9 +543,84 @@ export const addRating = async (
     throw new BadRequestError('errors.badRequest', lang);
   }
 
-  booking.rating = rating;
-  booking.review = review;
+  if (booking.caddieRating) {
+    throw new BadRequestError('booking.alreadyRated', lang);
+  }
+
+  booking.caddieRating = rating;
+  booking.caddieReview = review;
   await booking.save();
+
+  // Actualizar promedio y totalRatings en el modelo Caddie
+  const caddie = await Caddie.findById(booking.caddieId);
+  if (caddie) {
+    // Contar todas las calificaciones recibidas por el caddie
+    const ratings = await Booking.find({
+      caddieId: caddie._id,
+      caddieRating: { $exists: true, $ne: null },
+    }).select('caddieRating');
+    const totalRatings = ratings.length;
+    const avgRating =
+      totalRatings > 0
+        ? ratings.reduce((sum, b) => sum + (b.caddieRating || 0), 0) / totalRatings
+        : 0;
+    caddie.rating = avgRating;
+    caddie.totalRatings = totalRatings;
+    await caddie.save();
+  }
+
+  return booking;
+};
+
+// --- FUNCIÓN ANTERIOR DE DISPONIBILIDAD DE CADDIE ---
+// Calificación del caddie al golfer
+export const addGolferRating = async (
+  bookingId: string,
+  caddieUserId: string,
+  rating: number,
+  review: string,
+  lang: string
+): Promise<IBooking> => {
+  const booking = await Booking.findById(bookingId);
+  if (!booking) {
+    throw new NotFoundError('booking.notFound', lang);
+  }
+
+  // Verificar que el usuario es el caddie de la reserva
+  const caddie = await Caddie.findOne({ userId: caddieUserId });
+  if (!caddie || caddie._id.toString() !== booking.caddieId.toString()) {
+    throw new BadRequestError('errors.forbidden', lang);
+  }
+
+  if (booking.status !== BookingStatus.COMPLETED) {
+    throw new BadRequestError('errors.badRequest', lang);
+  }
+
+  if (booking.golferRating) {
+    throw new BadRequestError('booking.alreadyRated', lang);
+  }
+
+  booking.golferRating = rating;
+  booking.golferReview = review;
+  await booking.save();
+
+  // Actualizar promedio y totalRatings en el modelo Golfer
+  const golfer = await Golfer.findById(booking.golferId);
+  if (golfer) {
+    // Contar todas las calificaciones recibidas por el golfer
+    const ratings = await Booking.find({
+      golferId: golfer._id,
+      golferRating: { $exists: true, $ne: null },
+    }).select('golferRating');
+    const totalRatings = ratings.length;
+    const avgRating =
+      totalRatings > 0
+        ? ratings.reduce((sum, b) => sum + (b.golferRating || 0), 0) / totalRatings
+        : 0;
+    golfer.rating = avgRating;
+    golfer.totalRatings = totalRatings;
+    await golfer.save();
+  }
 
   return booking;
 };

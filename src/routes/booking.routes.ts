@@ -60,6 +60,11 @@ router.put('/:id/complete', authenticate, authorize(UserRole.CADDIE), completeBo
 // Cancelar una reserva (golfer o caddie)
 router.put('/:id/cancel', authenticate, cancelBooking);
 
+
+// Calificar una reserva como caddie (al golfer)
+import { rateGolfer } from '../controllers/booking.controller';
+router.put('/:id/rate-golfer', authenticate, authorize(UserRole.CADDIE), rateGolfer);
+
 // Calificar una reserva (solo golfer)
 router.put('/:id/rate', authenticate, authorize(UserRole.GOLFER), rateBooking);
 
