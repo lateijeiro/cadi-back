@@ -17,7 +17,12 @@ import {
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { UserRole } from '../types/enums';
 
+
 const router = Router();
+
+// Chequear disponibilidad y sugerir slot (usado por el frontend)
+import { checkAvailabilityAndSuggest } from '../controllers/booking.controller';
+router.get('/check-availability', authenticate, checkAvailabilityAndSuggest);
 
 // Crear una reserva (solo golfer)
 router.post('/', authenticate, authorize(UserRole.GOLFER), createBooking);

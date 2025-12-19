@@ -1,3 +1,86 @@
+// Chequear disponibilidad y sugerir slot (endpoint único para frontend)
+export const checkAvailabilityAndSuggest = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { caddieId, clubId, date, startTime, endTime } = req.query;
+    const lang = req.language || 'es';
+
+    if (!caddieId || !clubId || !date || !startTime || !endTime) {
+      return res.status(400).json({
+        message: t('validation.required', lang),
+      });
+    }
+
+    // 1. Obtener bloques disponibles reales
+    const availability = await bookingService.getCaddieAvailability(
+      caddieId as string,
+      date as string,
+      clubId as string,
+      lang,
+      startTime as string,
+      endTime as string
+    );
+
+    // Convertir HH:mm a minutos
+    const toMinutes = (time: string) => {
+      const [h, m] = time.split(':').map(Number);
+      return h * 60 + m;
+    };
+    const reqStart = toMinutes(startTime as string);
+    const reqEnd = toMinutes(endTime as string);
+
+    // Buscar el bloque que cubre el inicio del rango buscado (el más natural para pre-cargar)
+    // Buscar el bloque que empieza exactamente en el inicio buscado y termina después
+    let bestBlock = availability.availableBlocks.find(b => {
+      const blockStart = toMinutes(b.start);
+      const blockEnd = toMinutes(b.end);
+      return blockStart === reqStart && blockEnd > reqStart;
+    });
+    // Si no hay, buscar el primer bloque que contenga el inicio (pero no bloques que empiecen antes)
+    if (!bestBlock) {
+      bestBlock = availability.availableBlocks.find(b => {
+        const blockStart = toMinutes(b.start);
+        const blockEnd = toMinutes(b.end);
+        return blockStart > reqStart && blockStart < reqEnd;
+      });
+    }
+    // Si no hay, buscar el primer bloque que solape parcial o totalmente
+    if (!bestBlock) {
+      bestBlock = availability.availableBlocks.find(b => {
+        const blockStart = toMinutes(b.start);
+        const blockEnd = toMinutes(b.end);
+        return blockStart < reqEnd && blockEnd > reqStart;
+      });
+    }
+
+    if (bestBlock) {
+      // Devolver el bloque real disponible
+      return res.json({
+        available: true,
+        availableBlock: bestBlock,
+      });
+    }
+
+    // 2. Sugerir siguiente slot disponible
+    const suggestions = await bookingService.suggestAlternativeTimes(
+      caddieId as string,
+      date as string,
+      clubId as string,
+      startTime as string,
+      endTime as string,
+      lang
+    );
+
+    if (suggestions && suggestions.alternatives && suggestions.alternatives.length > 0) {
+      // Tomar el primer slot sugerido
+      return res.json({ available: false, nextAvailable: suggestions.alternatives[0] });
+    }
+
+    // 3. No hay disponibilidad ni sugerencias
+    return res.json({ available: false });
+  } catch (error) {
+    return next(error);
+  }
+};
 import { Request, Response, NextFunction } from 'express';
 import * as bookingService from '../services/booking.service';
 import { IBooking } from '../models/Booking.model';

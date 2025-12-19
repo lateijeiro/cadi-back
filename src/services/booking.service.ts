@@ -17,6 +17,15 @@ interface CreateBookingData {
 
 export const createBooking = async (data: CreateBookingData, lang: string): Promise<IBooking> => {
   const { golferId, caddieId, clubId, date, startTime, endTime } = data;
+  // LOG de depuración de entrada
+  console.log('[BOOKING-DEBUG] Solicitud de reserva:', {
+    date,
+    startTime,
+    endTime,
+    clubId,
+    caddieId,
+    golferId
+  });
 
   // Verificar que el golfer existe
   const golfer = await Golfer.findOne({ userId: golferId });
@@ -51,8 +60,12 @@ export const createBooking = async (data: CreateBookingData, lang: string): Prom
     throw new BadRequestError('La hora de fin debe ser posterior a la hora de inicio', 'errors.validation');
   }
 
+  // Usar Luxon para obtener el día de la semana correctamente
+  const bookingDateLuxon = DateTime.fromISO(date, { zone: 'utc' });
+  const mongoDayOfWeek = bookingDateLuxon.weekday % 7; // 0=domingo, 1=lunes, ..., 6=sábado
+  const bookingDate = bookingDateLuxon.toJSDate();
+
   // Verificar solapamiento con otras reservas del caddie
-  const bookingDate = new Date(date);
   const existingBookings = await Booking.find({
     caddieId,
     date: bookingDate,
@@ -69,8 +82,10 @@ export const createBooking = async (data: CreateBookingData, lang: string): Prom
     throw new BadRequestError('El caddie ya tiene una reserva en ese horario', 'booking.alreadyBooked');
   }
 
-  // Verificar disponibilidad del caddie
-  const dayOfWeek = bookingDate.getDay();
+  // Log de depuración para dayOfWeek y bloques recurrentes
+  console.log('[BOOKING-DEBUG] bookingDate:', bookingDate);
+  console.log('[BOOKING-DEBUG] mongoDayOfWeek calculado:', mongoDayOfWeek);
+  console.log('[BOOKING-DEBUG] recurringAvailability:', JSON.stringify(caddie.recurringAvailability, null, 2));
 
   // Convertir hora "HH:mm" a minutos desde medianoche para comparaciones
   const timeToMinutes = (time: string): number => {
@@ -81,42 +96,70 @@ export const createBooking = async (data: CreateBookingData, lang: string): Prom
   const requestStartMinutes = timeToMinutes(startTime);
   const requestEndMinutes = timeToMinutes(endTime);
 
-  // Función para verificar si el rango solicitado está dentro de un slot de disponibilidad
-  const isWithinTimeSlot = (slot: string): boolean => {
-    // Slot puede ser "9-12", "09:00-12:00", etc
-    const slotMatch = slot.match(/(\d{1,2}):?(\d{0,2})-(\d{1,2}):?(\d{0,2})/);
-    if (!slotMatch) return false;
+  // (Eliminada función isOverlappingTimeSlot porque no se utiliza)
 
-    const slotStartHours = parseInt(slotMatch[1]);
-    const slotStartMins = slotMatch[2] ? parseInt(slotMatch[2]) : 0;
-    const slotEndHours = parseInt(slotMatch[3]);
-    const slotEndMins = slotMatch[4] ? parseInt(slotMatch[4]) : 0;
-
-    const slotStartMinutes = slotStartHours * 60 + slotStartMins;
-    const slotEndMinutes = slotEndHours * 60 + slotEndMins;
-
-    // El rango solicitado debe estar completamente dentro del slot
-    return requestStartMinutes >= slotStartMinutes && requestEndMinutes <= slotEndMinutes;
+  // Permitir reservas que crucen varios bloques contiguos
+  const hourToMinutes = (h: string) => {
+    const [hh, mm] = h.split(':').map(Number);
+    return hh * 60 + (isNaN(mm) ? 0 : mm);
   };
 
-  // Verificar disponibilidad específica para esa fecha
-  const hasSpecificAvailability = caddie.availability?.some(
-    (avail) =>
-      avail.date.toISOString().split('T')[0] === date &&
-      avail.timeSlots.some(isWithinTimeSlot)
-  );
+  const reqStart = hourToMinutes(startTime);
+  const reqEnd = hourToMinutes(endTime);
 
-  // Verificar disponibilidad recurrente
-  const hasRecurringAvailability = caddie.recurringAvailability?.some(
-    (avail) =>
-      avail.clubId.toString() === clubId &&
-      avail.dayOfWeek === dayOfWeek &&
-      avail.timeSlots.some(isWithinTimeSlot)
-  );
+  // Obtener todos los bloques disponibles para la fecha y club
+  let allSlots: { start: number, end: number }[] = [];
 
-  if (!hasSpecificAvailability && !hasRecurringAvailability) {
+  // Disponibilidad específica
+  if (caddie.availability) {
+    caddie.availability.forEach(avail => {
+      if (avail.date.toISOString().split('T')[0] === date) {
+        avail.timeSlots.forEach(slot => {
+          const [slotStart, slotEnd] = slot.split('-').map(s => s.trim());
+          allSlots.push({ start: hourToMinutes(slotStart), end: hourToMinutes(slotEnd) });
+        });
+      }
+    });
+  }
+  // Disponibilidad recurrente
+  if (caddie.recurringAvailability) {
+    caddie.recurringAvailability.forEach(avail => {
+      if (avail.clubId.toString() === clubId && avail.dayOfWeek === mongoDayOfWeek) {
+        avail.timeSlots.forEach(slot => {
+          const [slotStart, slotEnd] = slot.split('-').map(s => s.trim());
+          allSlots.push({ start: hourToMinutes(slotStart), end: hourToMinutes(slotEnd) });
+        });
+      }
+    });
+  }
+
+  // Unir y ordenar los bloques
+  allSlots = allSlots.sort((a, b) => a.start - b.start);
+
+  // Unir bloques contiguos o solapados
+  const merged: { start: number, end: number }[] = [];
+  for (const slot of allSlots) {
+    if (!merged.length) {
+      merged.push({ ...slot });
+    } else {
+      const last = merged[merged.length - 1];
+      if (slot.start <= last.end) {
+        last.end = Math.max(last.end, slot.end);
+      } else {
+        merged.push({ ...slot });
+      }
+    }
+  }
+
+  // Verificar si el rango solicitado está completamente cubierto por algún bloque unido
+  const isCovered = merged.some(block => block.start <= reqStart && block.end >= reqEnd);
+
+  console.log('[BOOKING-DEBUG] merged blocks:', merged, 'req:', { reqStart, reqEnd }, 'isCovered:', isCovered);
+  if (!isCovered) {
+    console.log('[BOOKING-DEBUG] No hay disponibilidad para el rango solicitado (cruce de bloques).');
     throw new BadRequestError('El caddie no está disponible en ese horario', 'caddie.notAvailable');
   }
+  console.log('[BOOKING-DEBUG] ¡Reserva PASA validación de disponibilidad cruzando bloques! Se guardará con:', { startTime, endTime });
 
   // Calcular precio total
   const durationMinutes = requestEndMinutes - requestStartMinutes;
@@ -589,58 +632,35 @@ export const suggestAlternativeTimes = async (
   caddieId: string,
   date: string,
   clubId: string,
-  requestedStart: string,
-  requestedEnd: string,
+  _requestedStart: string,
+  _requestedEnd: string,
   lang: string
 ) => {
-  const availability = await getCaddieAvailability(caddieId, date, clubId, lang);
+  const maxDaysToSearch = 14; // Buscar hasta 2 semanas adelante
+  const maxDatesWithBlocks = 2; // Sugerir como máximo 2 fechas con bloques disponibles
+  const alternatives: Array<{ date: string; startTime: string; endTime: string }> = [];
 
-  const timeToMinutes = (time: string): number => {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours * 60 + minutes;
-  };
-
-  const requestedStartMinutes = timeToMinutes(requestedStart);
-  const requestedEndMinutes = timeToMinutes(requestedEnd);
-  const requestedDuration = requestedEndMinutes - requestedStartMinutes;
-
-  // Buscar slots disponibles que puedan acomodar la duración solicitada
-  const alternatives = availability.availableBlocks
-    .map((range: { start: string; end: string }) => {
-      const rangeStartMinutes = timeToMinutes(range.start);
-      const rangeEndMinutes = timeToMinutes(range.end);
-      const rangeDuration = rangeEndMinutes - rangeStartMinutes;
-
-      if (rangeDuration < requestedDuration) {
-        return null; // No cabe
+  // Buscar primero en la fecha solicitada
+  let currentDate = date;
+  let foundDates = 0;
+  let daysChecked = 0;
+  while (foundDates < maxDatesWithBlocks && daysChecked < maxDaysToSearch) {
+    const availability = await getCaddieAvailability(caddieId, currentDate, clubId, lang);
+    if (availability && Array.isArray(availability.availableBlocks) && availability.availableBlocks.length > 0) {
+      for (const block of availability.availableBlocks) {
+        alternatives.push({ date: currentDate, startTime: block.start, endTime: block.end });
       }
-
-      // Calcular qué tan cerca está del horario solicitado
-      const distanceFromRequested = Math.abs(rangeStartMinutes - requestedStartMinutes);
-
-      return {
-        startTime: range.start,
-        endTime: range.end,
-        suggestedStart: range.start,
-        suggestedEnd: (() => {
-          const newMinutes = rangeStartMinutes + requestedDuration;
-          const hours = Math.floor(newMinutes / 60);
-          const mins = newMinutes % 60;
-          return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
-        })(),
-        distance: distanceFromRequested,
-      };
-    })
-    .filter((alt): alt is { startTime: string; endTime: string; suggestedStart: string; suggestedEnd: string; distance: number } => Boolean(alt))
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, 3); // Top 3 alternativas más cercanas
+      foundDates++;
+    }
+    // Avanzar al siguiente día
+    const nextDate = new Date(currentDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+    currentDate = nextDate.toISOString().split('T')[0];
+    daysChecked++;
+  }
 
   return {
-    requestedTime: { start: requestedStart, end: requestedEnd },
-    isAvailable: alternatives.some(
-      (alt: any) => alt.suggestedStart === requestedStart
-    ),
-    alternatives,
+    alternatives: alternatives.slice(0, 6), // Limitar a 6 bloques sugeridos (3 por fecha máx)
   };
 };
 
