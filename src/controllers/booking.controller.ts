@@ -1,3 +1,29 @@
+// Obtener reservas como golfer (solo reservas donde soy golfer)
+import { Request, Response, NextFunction } from 'express';
+import * as bookingService from '../services/booking.service';
+import { IBooking } from '../models/Booking.model';
+import { t } from '../utils/i18n';
+
+export const getBookingsAsGolfer = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const bookings = await bookingService.getMyBookingsAsGolfer(userId);
+    res.json({ data: bookings });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Obtener reservas como caddie (solo reservas donde soy caddie)
+export const getBookingsAsCaddie = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const bookings = await bookingService.getMyBookingsAsCaddie(userId);
+    res.json({ data: bookings });
+  } catch (error) {
+    next(error);
+  }
+};
 // Chequear disponibilidad y sugerir slot (endpoint único para frontend)
 export const checkAvailabilityAndSuggest = async (req: Request, res: Response, next: NextFunction) => {
   try {

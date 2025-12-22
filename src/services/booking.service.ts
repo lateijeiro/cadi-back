@@ -4,6 +4,7 @@ import { Golfer } from '../models/Golfer.model';
 import { Club } from '../models/Club.model';
 import { BookingStatus } from '../types/enums';
 import { NotFoundError, BadRequestError } from '../utils/errors';
+import { emitBookingEvent } from '../utils/bookingSocketEvents';
 import { DateTime } from 'luxon';
 
 interface CreateBookingData {
@@ -177,8 +178,27 @@ export const createBooking = async (data: CreateBookingData, lang: string): Prom
     totalPrice,
     status: BookingStatus.PENDING,
   });
-
-  return booking;
+  console.log('[BOOKING][DEBUG] Después de create (create):', booking.toObject());
+  // Populamos caddieId y golferId con userId para el evento socket
+  const populatedBooking = await Booking.findById(booking._id)
+    .populate({
+      path: 'golferId',
+      select: 'userId',
+      populate: { path: 'userId', select: 'firstName lastName email phone' }
+    })
+    .populate({
+      path: 'caddieId',
+      select: 'userId dni category experience suggestedRate',
+      populate: { path: 'userId', select: 'firstName lastName phone' }
+    })
+    .populate('clubId', 'name address city province');
+  // Emitir evento de creación de reserva
+  console.log('[BOOKING][DEBUG] Antes de emitir evento (create)');
+  if (!populatedBooking) {
+    throw new Error('Error interno: No se pudo poblar la reserva recién creada');
+  }
+  emitBookingEvent('booking:created', populatedBooking);
+  return populatedBooking;
 };
 
 export const getBookingById = async (bookingId: string, lang: string): Promise<IBooking> => {
@@ -274,8 +294,29 @@ export const acceptBooking = async (
   };
   booking.status = BookingStatus.ACCEPTED;
   booking.qrCode = JSON.stringify(qrCodeData);
+  console.log('[BOOKING][DEBUG] Antes de save (accept):', booking.toObject());
   await booking.save();
-  return booking;
+  console.log('[BOOKING][DEBUG] Después de save (accept):', booking.toObject());
+  // Emitir evento de aceptación de reserva
+  console.log('[BOOKING][DEBUG] Antes de emitir evento (accept)');
+  // Populamos caddieId y golferId con userId para el evento socket
+  const populatedBooking = await Booking.findById(booking._id)
+    .populate({
+      path: 'golferId',
+      select: 'userId',
+      populate: { path: 'userId', select: 'firstName lastName email phone' }
+    })
+    .populate({
+      path: 'caddieId',
+      select: 'userId dni category experience suggestedRate',
+      populate: { path: 'userId', select: 'firstName lastName phone' }
+    })
+    .populate('clubId', 'name address city province');
+  if (!populatedBooking) {
+    throw new Error('Error interno: No se pudo poblar la reserva actualizada');
+  }
+  emitBookingEvent('booking:updated', populatedBooking);
+  return populatedBooking;
 };
 
 export const rejectBooking = async (
@@ -283,7 +324,19 @@ export const rejectBooking = async (
   caddieUserId: string,
   lang: string
 ): Promise<IBooking> => {
-  const booking = await Booking.findById(bookingId).populate('caddieId');
+  // Populamos tanto golferId como caddieId para el evento socket
+  const booking = await Booking.findById(bookingId)
+    .populate({
+      path: 'golferId',
+      select: 'userId',
+      populate: { path: 'userId', select: 'firstName lastName email phone' }
+    })
+    .populate({
+      path: 'caddieId',
+      select: 'userId dni category experience suggestedRate',
+      populate: { path: 'userId', select: 'firstName lastName phone' }
+    })
+    .populate('clubId', 'name address city province');
   if (!booking) {
     throw new NotFoundError('booking.notFound', lang);
   }
@@ -299,8 +352,12 @@ export const rejectBooking = async (
   }
 
   booking.status = BookingStatus.REJECTED;
+  console.log('[BOOKING][DEBUG] Antes de save (reject):', booking.toObject());
   await booking.save();
-
+  console.log('[BOOKING][DEBUG] Después de save (reject):', booking.toObject());
+  // Emitir evento de rechazo de reserva
+  console.log('[BOOKING][DEBUG] Antes de emitir evento (reject)');
+  emitBookingEvent('booking:updated', booking);
   return booking;
 };
 
@@ -358,8 +415,12 @@ export const startBooking = async (
 
   // Cambiar status a in-progress
   booking.status = BookingStatus.IN_PROGRESS;
+  console.log('[BOOKING][DEBUG] Antes de save (start):', booking.toObject());
   await booking.save();
-
+  console.log('[BOOKING][DEBUG] Después de save (start):', booking.toObject());
+  // Emitir evento de inicio de reserva
+  console.log('[BOOKING][DEBUG] Antes de emitir evento (start)');
+  emitBookingEvent('booking:updated', booking);
   return booking;
 };
 
@@ -385,8 +446,12 @@ export const completeBooking = async (
   }
 
   booking.status = BookingStatus.COMPLETED;
+  console.log('[BOOKING][DEBUG] Antes de save (complete):', booking.toObject());
   await booking.save();
-
+  console.log('[BOOKING][DEBUG] Después de save (complete):', booking.toObject());
+  // Emitir evento de finalización de reserva
+  console.log('[BOOKING][DEBUG] Antes de emitir evento (complete)');
+  emitBookingEvent('booking:updated', booking);
   return booking;
 };
 
@@ -405,7 +470,19 @@ export const cancelBooking = async (
   };
 }> => {
 
-  const booking = await Booking.findById(bookingId).populate('caddieId golferId');
+  // Populamos tanto golferId como caddieId para el evento socket
+  const booking = await Booking.findById(bookingId)
+    .populate({
+      path: 'golferId',
+      select: 'userId',
+      populate: { path: 'userId', select: 'firstName lastName email phone' }
+    })
+    .populate({
+      path: 'caddieId',
+      select: 'userId dni category experience suggestedRate',
+      populate: { path: 'userId', select: 'firstName lastName phone' }
+    })
+    .populate('clubId', 'name address city province');
   if (!booking) {
     throw new NotFoundError('booking.notFound', lang);
   }
@@ -511,6 +588,8 @@ export const cancelBooking = async (
 
   // TODO: Notificar a la otra parte (caddie o golfer según quién canceló)
 
+  // Emitir evento socket con booking populado
+  emitBookingEvent('booking:updated', booking);
   return {
     booking,
     refundInfo: {

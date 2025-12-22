@@ -28,6 +28,14 @@ router.get('/check-availability', authenticate, checkAvailabilityAndSuggest);
 router.post('/', authenticate, authorize(UserRole.GOLFER), createBooking);
 
 // Obtener mis reservas (golfer o caddie)
+
+// Obtener reservas como golfer
+import { getBookingsAsGolfer, getBookingsAsCaddie } from '../controllers/booking.controller';
+router.get('/golfer', authenticate, authorize(UserRole.GOLFER), getBookingsAsGolfer);
+// Obtener reservas como caddie
+router.get('/caddie', authenticate, authorize(UserRole.CADDIE), getBookingsAsCaddie);
+
+// Obtener mis reservas (golfer o caddie)
 router.get('/me', authenticate, getMyBookings);
 
 // Obtener próximo servicio (golfer o caddie)
