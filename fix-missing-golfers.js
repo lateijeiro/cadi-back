@@ -9,7 +9,7 @@
 
 const { MongoClient } = require('mongodb');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://lucasteijeiro:QBGTWwHRdGz5Z47q@cadiappcluster.dllvk.mongodb.net/cadiapp?retryWrites=true&w=majority&appName=CadiAppCluster';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 async function fixMissingGolfers() {
   const client = new MongoClient(MONGODB_URI);
