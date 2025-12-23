@@ -39,6 +39,9 @@ export const authenticate = async (
       role: decoded.role,
     };
 
+    // Log de depuración para ver el usuario y rol en cada request autenticado
+    console.log('[AUTH][DEBUG] Usuario autenticado:', req.user);
+
     next();
   } catch (error) {
     next(error);

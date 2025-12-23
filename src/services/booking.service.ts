@@ -183,7 +183,7 @@ export const createBooking = async (data: CreateBookingData, lang: string): Prom
   const populatedBooking = await Booking.findById(booking._id)
     .populate({
       path: 'golferId',
-      select: 'userId',
+      select: 'userId handicap',
       populate: { path: 'userId', select: 'firstName lastName email phone' }
     })
     .populate({
@@ -203,7 +203,7 @@ export const createBooking = async (data: CreateBookingData, lang: string): Prom
 
 export const getBookingById = async (bookingId: string, lang: string): Promise<IBooking> => {
   const booking = await Booking.findById(bookingId)
-    .populate('golferId', 'userId')
+    .populate('golferId', 'userId handicap')
     .populate({
       path: 'caddieId',
       select: 'userId dni category experience',
@@ -251,7 +251,7 @@ export const getMyBookingsAsCaddie = async (userId: string): Promise<IBooking[]>
   const bookings = await Booking.find({ caddieId: caddie._id })
     .populate({
       path: 'golferId',
-      select: 'userId',
+      select: 'userId handicap',
       populate: {
         path: 'userId',
         select: 'firstName lastName phone email'
@@ -303,7 +303,7 @@ export const acceptBooking = async (
   const populatedBooking = await Booking.findById(booking._id)
     .populate({
       path: 'golferId',
-      select: 'userId',
+      select: 'userId handicap',
       populate: { path: 'userId', select: 'firstName lastName email phone' }
     })
     .populate({
@@ -328,7 +328,7 @@ export const rejectBooking = async (
   const booking = await Booking.findById(bookingId)
     .populate({
       path: 'golferId',
-      select: 'userId',
+      select: 'userId handicap',
       populate: { path: 'userId', select: 'firstName lastName email phone' }
     })
     .populate({
@@ -720,23 +720,22 @@ export const getCaddieAvailability = async (
   clubId: string,
   lang: string,
   searchStartTime?: string,
-  searchEndTime?: string,
-  timeZone?: string // Nueva opción: zona horaria
+  searchEndTime?: string
 ) => {
   const caddie = await Caddie.findById(caddieId);
   if (!caddie) throw new NotFoundError('caddie.notFound', lang);
 
-  // Buscar disponibilidad recurrente para ese club y día de la semana
-  const zone = timeZone || 'UTC';
-  const bookingDate = DateTime.fromISO(date, { zone });
+  // Forzar uso de UTC para evitar desfases de zona horaria
+  const bookingDate = DateTime.fromISO(date, { zone: 'utc' });
   // Luxon: weekday 1=lunes ... 7=domingo. Mongo: 0=domingo ... 6=sábado
   const dayOfWeek = bookingDate.weekday % 7;
+  // Log explícito para depuración
+  console.log('[AVAIL-DEBUG] date recibido:', date, '| bookingDate (UTC):', bookingDate.toISODate(), '| weekday:', bookingDate.weekday, '| dayOfWeek usado:', dayOfWeek);
   const recurring = caddie.recurringAvailability?.filter(
     (a: any) => a.clubId.toString() === clubId && a.dayOfWeek === dayOfWeek
   ) || [];
 
-  // LOG SEGURO: dayOfWeek y recurring filtrado
-  console.log('[AVAIL-DEBUG] dayOfWeek:', dayOfWeek);
+  // LOG SEGURO: recurring filtrado
   console.log('[AVAIL-DEBUG] recurring filtrado:', JSON.stringify(recurring));
 
   // Obtener reservas existentes para ese caddie, club y fecha
