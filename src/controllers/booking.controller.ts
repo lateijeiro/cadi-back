@@ -107,11 +107,6 @@ export const checkAvailabilityAndSuggest = async (req: Request, res: Response, n
     return next(error);
   }
 };
-import { Request, Response, NextFunction } from 'express';
-import * as bookingService from '../services/booking.service';
-import { IBooking } from '../models/Booking.model';
-import { t } from '../utils/i18n';
-
 // Crear una nueva reserva (solo golfer)
 export const createBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {

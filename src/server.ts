@@ -1,14 +1,23 @@
-import app from './app';
-import { config } from './config/environment';
+// src/server.ts
 import { connectDatabase } from './config/database';
+import { config } from './config/environment';
+import { startSocketServer } from './socketServer';
 
-const PORT = config.port;
+async function bootstrap() {
+  await connectDatabase();
 
+  // Render inyecta PORT. Local puede usar config.port.
+  process.env.PORT = process.env.PORT || String(config.port || 3000);
 
-// El servidor ahora se inicializa desde socketServer.ts
-// No hacer app.listen aquí para evitar conflicto de puertos
-// Solo importar socketServer para levantar todo
-import './socketServer';
+  const ctx = await startSocketServer();
+  if (!ctx) {
+    throw new Error('No se pudo iniciar el servidor HTTP/Socket');
+  }
 
-// Inicializar servidor de sockets
-import './socketServer';
+  console.log(`[BOOT] Server started. PORT=${process.env.PORT}`);
+}
+
+bootstrap().catch((err) => {
+  console.error('[BOOT] Fatal error:', err);
+  process.exit(1);
+});

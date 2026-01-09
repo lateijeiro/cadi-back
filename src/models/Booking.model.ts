@@ -28,6 +28,7 @@ export interface IBooking extends Document {
   refundId?: string; // ID del refund de MercadoPago
   createdAt: Date;
   updatedAt: Date;
+  timeSlot?: string;
 }
 
 const BookingSchema = new Schema<IBooking>(
